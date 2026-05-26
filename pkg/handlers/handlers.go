@@ -167,7 +167,7 @@ func DeleteUser(c *gin.Context) {
 
 func SubmitSpeedTest(c *gin.Context) {
 	var req struct {
-		UnitID   uint    `json:"unit_id" binding:"required"`
+		UnitID   uint    `json:"unit_id"`
 		Download float64 `json:"download" binding:"required"`
 		Upload   float64 `json:"upload"`
 		Ping     float64 `json:"ping"`
@@ -179,8 +179,32 @@ func SubmitSpeedTest(c *gin.Context) {
 		return
 	}
 
+	var unitID uint
+	isAdmin, _ := c.Get("is_admin")
+	userUnitIDInterface, _ := c.Get("unit_id")
+
+	// 确定要使用的单位 ID
+	if isAdmin.(bool) && req.UnitID > 0 {
+		// 管理员可以指定单位
+		unitID = req.UnitID
+	} else {
+		// 普通用户使用自己的单位
+		if userUnitIDInterface != nil {
+			userUnitID := userUnitIDInterface.(*uint)
+			if userUnitID != nil {
+				unitID = *userUnitID
+			} else {
+				c.JSON(http.StatusBadRequest, gin.H{"error": "User not associated with a unit"})
+				return
+			}
+		} else {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "User not associated with a unit"})
+			return
+		}
+	}
+
 	test := models.SpeedTest{
-		UnitID:    req.UnitID,
+		UnitID:    unitID,
 		Download:  req.Download,
 		Upload:    req.Upload,
 		Ping:      req.Ping,
@@ -205,7 +229,25 @@ func GetSpeedTests(c *gin.Context) {
 	var tests []models.SpeedTest
 	query := database.DB.Preload("Unit").Order("created_at DESC")
 
-	if !isAdmin.(bool) && unitIDInterface != nil {
+	// 首先检查是否有查询参数指定 unit_id
+	if unitIDQuery := c.Query("unit_id"); unitIDQuery != "" {
+		qUnitID, _ := strconv.Atoi(unitIDQuery)
+		// 只有管理员或者查询的是自己的单位
+		if isAdmin.(bool) {
+			query = query.Where("unit_id = ?", qUnitID)
+		} else if unitIDInterface != nil {
+			userUnitID := unitIDInterface.(*uint)
+			if userUnitID != nil && *userUnitID == uint(qUnitID) {
+				query = query.Where("unit_id = ?", qUnitID)
+			} else {
+				// 非管理员不能查询其他单位
+				query = query.Where("1=0") // 不返回任何记录
+			}
+		} else {
+			query = query.Where("1=0") // 不返回任何记录
+		}
+	} else if !isAdmin.(bool) && unitIDInterface != nil {
+		// 非管理员默认只看自己单位的记录
 		unitID := unitIDInterface.(*uint)
 		if unitID != nil {
 			query = query.Where("unit_id = ?", *unitID)
