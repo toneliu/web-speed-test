@@ -94,6 +94,7 @@ func main() {
 		auth.POST("/speedtest", handlers.SubmitSpeedTest)
 		auth.GET("/speedtests", handlers.GetSpeedTests)
 		auth.GET("/stats", handlers.GetStats)
+		auth.PUT("/user/password", handlers.ChangePassword)
 
 		admin := auth.Group("")
 		admin.Use(middleware.AdminRequired())

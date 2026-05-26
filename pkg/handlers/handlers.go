@@ -59,7 +59,9 @@ func GetUnits(c *gin.Context) {
 
 func CreateUnit(c *gin.Context) {
 	var req struct {
-		Name string `json:"name" binding:"required"`
+		Name     string `json:"name" binding:"required"`
+		Username string `json:"username"`
+		Password string `json:"password"`
 	}
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -70,6 +72,18 @@ func CreateUnit(c *gin.Context) {
 	if err := database.DB.Create(&unit).Error; err != nil {
 		c.JSON(http.StatusConflict, gin.H{"error": "Unit already exists"})
 		return
+	}
+
+	if req.Username != "" && req.Password != "" {
+		hashedPwd, _ := bcrypt.GenerateFromPassword([]byte(req.Password), bcrypt.DefaultCost)
+		unitID := unit.ID
+		user := models.User{
+			Username: req.Username,
+			Password: string(hashedPwd),
+			IsAdmin:  false,
+			UnitID:   &unitID,
+		}
+		database.DB.Create(&user)
 	}
 
 	c.JSON(http.StatusOK, unit)
@@ -135,6 +149,45 @@ func CreateUnitUser(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, user)
+}
+
+func ChangePassword(c *gin.Context) {
+	var req struct {
+		OldPassword string `json:"old_password" binding:"required"`
+		NewPassword string `json:"new_password" binding:"required"`
+	}
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	userIDInterface, exists := c.Get("user_id")
+	if !exists || userIDInterface == nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	userID, ok := userIDInterface.(uint)
+	if !ok {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
+
+	var user models.User
+	if err := database.DB.First(&user, userID).Error; err != nil {
+		c.JSON(http.StatusNotFound, gin.H{"error": "User not found"})
+		return
+	}
+
+	if !database.CheckPassword(user.Password, req.OldPassword) {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid current password"})
+		return
+	}
+
+	hashedPwd, _ := bcrypt.GenerateFromPassword([]byte(req.NewPassword), bcrypt.DefaultCost)
+	user.Password = string(hashedPwd)
+	database.DB.Save(&user)
+	c.JSON(http.StatusOK, gin.H{"message": "Password changed"})
 }
 
 func ResetUserPassword(c *gin.Context) {
