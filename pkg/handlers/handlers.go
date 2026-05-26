@@ -180,18 +180,24 @@ func SubmitSpeedTest(c *gin.Context) {
 	}
 
 	var unitID uint
-	isAdmin, _ := c.Get("is_admin")
-	userUnitIDInterface, _ := c.Get("unit_id")
+	isAdminVal, isAdminExists := c.Get("is_admin")
+	userUnitIDInterface, userUnitIDExists := c.Get("unit_id")
+
+	isAdmin := false
+	if isAdminExists && isAdminVal != nil {
+		if adminBool, ok := isAdminVal.(bool); ok {
+			isAdmin = adminBool
+		}
+	}
 
 	// 确定要使用的单位 ID
-	if isAdmin.(bool) && req.UnitID > 0 {
+	if isAdmin && req.UnitID > 0 {
 		// 管理员可以指定单位
 		unitID = req.UnitID
 	} else {
 		// 普通用户使用自己的单位
-		if userUnitIDInterface != nil {
-			userUnitID := userUnitIDInterface.(*uint)
-			if userUnitID != nil {
+		if userUnitIDExists && userUnitIDInterface != nil {
+			if userUnitID, ok := userUnitIDInterface.(*uint); ok && userUnitID != nil {
 				unitID = *userUnitID
 			} else {
 				c.JSON(http.StatusBadRequest, gin.H{"error": "User not associated with a unit"})
@@ -223,8 +229,15 @@ func SubmitSpeedTest(c *gin.Context) {
 }
 
 func GetSpeedTests(c *gin.Context) {
-	isAdmin, _ := c.Get("is_admin")
-	unitIDInterface, _ := c.Get("unit_id")
+	isAdminVal, isAdminExists := c.Get("is_admin")
+	unitIDInterface, unitIDExists := c.Get("unit_id")
+
+	isAdmin := false
+	if isAdminExists && isAdminVal != nil {
+		if adminBool, ok := isAdminVal.(bool); ok {
+			isAdmin = adminBool
+		}
+	}
 
 	var tests []models.SpeedTest
 	query := database.DB.Preload("Unit").Order("created_at DESC")
@@ -233,24 +246,26 @@ func GetSpeedTests(c *gin.Context) {
 	if unitIDQuery := c.Query("unit_id"); unitIDQuery != "" {
 		qUnitID, _ := strconv.Atoi(unitIDQuery)
 		// 只有管理员或者查询的是自己的单位
-		if isAdmin.(bool) {
+		if isAdmin {
 			query = query.Where("unit_id = ?", qUnitID)
-		} else if unitIDInterface != nil {
-			userUnitID := unitIDInterface.(*uint)
-			if userUnitID != nil && *userUnitID == uint(qUnitID) {
-				query = query.Where("unit_id = ?", qUnitID)
+		} else if unitIDExists && unitIDInterface != nil {
+			if userUnitID, ok := unitIDInterface.(*uint); ok && userUnitID != nil {
+				if *userUnitID == uint(qUnitID) {
+					query = query.Where("unit_id = ?", qUnitID)
+				} else {
+					// 非管理员不能查询其他单位
+					query = query.Where("1=0") // 不返回任何记录
+				}
 			} else {
-				// 非管理员不能查询其他单位
-				query = query.Where("1=0") // 不返回任何记录
+				query = query.Where("1=0")
 			}
 		} else {
 			query = query.Where("1=0") // 不返回任何记录
 		}
-	} else if !isAdmin.(bool) && unitIDInterface != nil {
+	} else if !isAdmin && unitIDExists && unitIDInterface != nil {
 		// 非管理员默认只看自己单位的记录
-		unitID := unitIDInterface.(*uint)
-		if unitID != nil {
-			query = query.Where("unit_id = ?", *unitID)
+		if userUnitID, ok := unitIDInterface.(*uint); ok && userUnitID != nil {
+			query = query.Where("unit_id = ?", *userUnitID)
 		}
 	}
 
