@@ -22,33 +22,30 @@ func main() {
 
 	r := gin.Default()
 
-	api := r.Group("/api")
+	r.POST("/api/login", handlers.Login)
+	r.GET("/api/units", handlers.GetUnits)
+	r.POST("/api/speedtest", handlers.SubmitSpeedTest)
+
+	auth := r.Group("/api")
+	auth.Use(middleware.AuthMiddleware())
 	{
-		api.POST("/login", handlers.Login)
-		api.GET("/units", handlers.GetUnits)
-		api.POST("/speedtest", handlers.SubmitSpeedTest)
+		auth.GET("/speedtests", handlers.GetSpeedTests)
+		auth.GET("/stats", handlers.GetStats)
 
-		auth := api.Group("")
-		auth.Use(middleware.AuthMiddleware())
+		admin := auth.Group("")
+		admin.Use(middleware.AdminRequired())
 		{
-			auth.GET("/speedtests", handlers.GetSpeedTests)
-			auth.GET("/stats", handlers.GetStats)
+			admin.POST("/units", handlers.CreateUnit)
+			admin.PUT("/units/:id", handlers.UpdateUnit)
+			admin.DELETE("/units/:id", handlers.DeleteUnit)
+			admin.GET("/units/:id/users", handlers.GetUnitUsers)
+			admin.POST("/units/:id/users", handlers.CreateUnitUser)
+			admin.PUT("/users/:user_id/password", handlers.ResetUserPassword)
+			admin.DELETE("/users/:user_id", handlers.DeleteUser)
 
-			admin := auth.Group("")
-			admin.Use(middleware.AdminRequired())
-			{
-				admin.POST("/units", handlers.CreateUnit)
-				admin.PUT("/units/:id", handlers.UpdateUnit)
-				admin.DELETE("/units/:id", handlers.DeleteUnit)
-				admin.GET("/units/:id/users", handlers.GetUnitUsers)
-				admin.POST("/units/:id/users", handlers.CreateUnitUser)
-				admin.PUT("/users/:user_id/password", handlers.ResetUserPassword)
-				admin.DELETE("/users/:user_id", handlers.DeleteUser)
-
-				admin.GET("/topology", handlers.GetTopologyLinks)
-				admin.POST("/topology", handlers.CreateTopologyLink)
-				admin.DELETE("/topology/:id", handlers.DeleteTopologyLink)
-			}
+			admin.GET("/topology", handlers.GetTopologyLinks)
+			admin.POST("/topology", handlers.CreateTopologyLink)
+			admin.DELETE("/topology/:id", handlers.DeleteTopologyLink)
 		}
 	}
 
@@ -56,7 +53,21 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	r.StaticFS("/", http.FS(staticFS))
+	staticFileServer := http.FileServer(http.FS(staticFS))
+
+	r.NoRoute(func(c *gin.Context) {
+		path := c.Request.URL.Path
+		if path == "/" || path == "/index.html" {
+			c.FileFromFS("/index.html", http.FS(staticFS))
+		} else {
+			_, err := staticFS.Open(path)
+			if err == nil {
+				staticFileServer.ServeHTTP(c.Writer, c.Request)
+			} else {
+				c.FileFromFS("/index.html", http.FS(staticFS))
+			}
+		}
+	})
 
 	log.Println("Server starting on :8080")
 	if err := r.Run(":8080"); err != nil {
