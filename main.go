@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"strings"
 	"speedtest/pkg/database"
 	"speedtest/pkg/handlers"
 	"speedtest/pkg/middleware"
@@ -20,6 +21,7 @@ func main() {
 		log.Fatalf("Failed to init database: %v", err)
 	}
 
+	gin.SetMode(gin.ReleaseMode)
 	r := gin.Default()
 
 	r.POST("/api/login", handlers.Login)
@@ -53,20 +55,38 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	staticFileServer := http.FileServer(http.FS(staticFS))
 
 	r.NoRoute(func(c *gin.Context) {
 		path := c.Request.URL.Path
-		if path == "/" || path == "/index.html" {
-			c.FileFromFS("/index.html", http.FS(staticFS))
+
+		if strings.HasPrefix(path, "/api/") {
+			c.JSON(http.StatusNotFound, gin.H{"error": "API endpoint not found"})
+			return
+		}
+
+		var data []byte
+		var contentType string
+
+		if path == "/" || !strings.Contains(path, ".") {
+			data, err = fs.ReadFile(staticFS, "index.html")
+			contentType = "text/html; charset=utf-8"
 		} else {
-			_, err := staticFS.Open(path)
-			if err == nil {
-				staticFileServer.ServeHTTP(c.Writer, c.Request)
+			data, err = fs.ReadFile(staticFS, strings.TrimPrefix(path, "/"))
+			if err != nil {
+				data, err = fs.ReadFile(staticFS, "index.html")
+				contentType = "text/html; charset=utf-8"
 			} else {
-				c.FileFromFS("/index.html", http.FS(staticFS))
+				contentType = http.DetectContentType(data)
 			}
 		}
+
+		if err != nil {
+			c.Status(http.StatusInternalServerError)
+			return
+		}
+
+		c.Header("Content-Type", contentType)
+		c.String(http.StatusOK, string(data))
 	})
 
 	log.Println("Server starting on :8080")
