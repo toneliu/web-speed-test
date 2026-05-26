@@ -5,6 +5,7 @@ import (
 	"io/fs"
 	"log"
 	"net/http"
+	"os"
 	"strings"
 	"speedtest/pkg/database"
 	"speedtest/pkg/handlers"
@@ -19,6 +20,11 @@ var frontendFS embed.FS
 func main() {
 	if err := database.Init("speedtest.db"); err != nil {
 		log.Fatalf("Failed to init database: %v", err)
+	}
+
+	port := os.Getenv("PORT")
+	if port == "" {
+		port = "8080"
 	}
 
 	gin.SetMode(gin.ReleaseMode)
@@ -86,11 +92,13 @@ func main() {
 		}
 
 		c.Header("Content-Type", contentType)
+		c.Header("Cache-Control", "no-cache, no-store, must-revalidate")
 		c.String(http.StatusOK, string(data))
 	})
 
-	log.Println("Server starting on :8080")
-	if err := r.Run(":8080"); err != nil {
+	addr := ":" + port
+	log.Printf("Server starting on %s", addr)
+	if err := r.Run(addr); err != nil {
 		log.Fatalf("Failed to start server: %v", err)
 	}
 }
