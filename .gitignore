@@ -1,0 +1,25 @@
+# Compiled binaries
+speedtest
+speedtest.exe
+build/
+*.exe
+
+# Database
+*.db
+*.sqlite
+*.sqlite3
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Go
+*.o
+*.a
+go.work.sum

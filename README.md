@@ -9,6 +9,7 @@
 - **多单位与单位账号管理**：管理员可增删改查单位，并可为每个单位创建/重置登录账号（用户名 + 密码）
 - **拓扑可视化**：星型拓扑图展示服务器到各单位的链路带宽，支持管理员手动添加单位间自定义链路
 - **单文件部署**：生成一个可执行文件，运行即用（前端静态资源用 go:embed 嵌入，数据库用 SQLite）
+- **GitHub Actions 自动构建**：自动编译 Linux 和 Windows 版本并发布到 Release
 
 ## 默认账号
 
@@ -21,35 +22,75 @@
 
 ## 快速开始
 
-1. **下载或构建程序**
+### 从 Release 下载
+
+1. 访问 [Releases 页面](https://github.com/your-username/speedtest/releases)
+2. 下载对应系统的可执行文件：
+   - Linux (386): `speedtest-linux-386`
+   - Linux (AMD64): `speedtest-linux-amd64`
+   - Windows (386): `speedtest-windows-386.exe`
+   - Windows (AMD64): `speedtest-windows-amd64.exe`
+3. 运行程序：
    ```bash
-   # 已构建好的可直接运行
-   ./speedtest
+   # Linux
+   chmod +x speedtest-linux-amd64
+   ./speedtest-linux-amd64
+
+   # Windows (PowerShell)
+   .\speedtest-windows-amd64.exe
    ```
 
-2. **访问应用**
-   - 打开浏览器访问：http://localhost:8080
-   - 使用默认账号登录
+### 本地构建
 
-3. **开始测速**
-   - 选择单位
-   - 点击"开始测速"
-   - 查看结果和历史记录
+```bash
+# 克隆仓库
+git clone https://github.com/your-username/speedtest.git
+cd speedtest
+
+# 安装依赖
+go mod tidy
+
+# 运行开发服务器
+go run main.go
+
+# 构建可执行文件
+go build -o speedtest .
+
+# 使用脚本构建所有平台版本
+./build.sh
+```
+
+### 访问应用
+
+- 打开浏览器访问：http://localhost:8080
+- 使用默认账号登录
+
+### 开始测速
+
+- 选择单位
+- 点击"开始测速"
+- 查看结果和历史记录
 
 ## 项目结构
 
 ```
-/workspace/
-├── main.go          # 主程序入口
-├── go.mod           # Go 依赖管理
-├── frontend/        # 前端文件
-│   └── index.html   # 单页面应用
-├── pkg/
-│   ├── models/      # 数据模型
-│   ├── database/    # 数据库操作
-│   ├── middleware/  # 中间件
-│   └── handlers/    # API 处理
-└── speedtest        # 可执行文件（构建后生成）
+speedtest/
+├── main.go              # 主程序入口
+├── go.mod               # Go 依赖管理
+├── go.sum               # Go 依赖锁定
+├── build.sh             # 本地构建脚本
+├── .gitignore           # Git 忽略文件
+├── README.md            # 项目文档
+├── .github/
+│   └── workflows/
+│       └── release.yml  # GitHub Actions 配置
+├── frontend/
+│   └── index.html       # 单页面应用
+└── pkg/
+    ├── models/          # 数据模型
+    ├── database/        # 数据库操作
+    ├── middleware/      # 认证中间件
+    └── handlers/        # API 处理函数
 ```
 
 ## 开发
@@ -63,6 +104,34 @@ go run main.go
 
 # 构建可执行文件
 go build -o speedtest .
+
+# 构建所有平台版本
+./build.sh
+```
+
+## GitHub Actions 自动构建和发布
+
+项目配置了 GitHub Actions 自动构建和发布流程：
+
+### 触发方式
+
+1. **推送 Tag**：当推送格式为 `v*` 的 tag 时（如 `v1.0.0`），自动触发构建和发布
+2. **手动触发**：在 GitHub 仓库的 Actions 页面手动触发
+
+### 发布流程
+
+- 自动构建 Linux (386/AMD64) 和 Windows (386/AMD64) 版本
+- 将构建产物上传到 Artifacts
+- 自动创建 GitHub Release 并附加所有编译好的文件
+
+### 创建发布
+
+```bash
+# 创建 tag
+git tag -a v1.0.0 -m "Release version 1.0.0"
+
+# 推送 tag
+git push origin v1.0.0
 ```
 
 ## 技术栈
@@ -70,3 +139,4 @@ go build -o speedtest .
 - **后端**：Go + Gin + GORM + SQLite + JWT
 - **前端**：原生 HTML/JS + Chart.js
 - **打包**：go:embed 实现单文件部署
+- **CI/CD**：GitHub Actions
