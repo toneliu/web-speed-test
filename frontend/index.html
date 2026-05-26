@@ -29,8 +29,8 @@
         .nav button.active { background: #667eea; color: white; }
         h1, h2, h3 { margin-bottom: 16px; color: #1f2937; }
         .speed-display { text-align: center; padding: 40px; }
-        .speed-value { font-size: 64px; font-weight: 700; color: #667eea; }
-        .speed-unit { font-size: 24px; color: #6b7280; }
+        .speed-value { font-size: 72px; font-weight: 700; color: #667eea; }
+        .speed-unit { font-size: 24px; color: #6b7280; margin-bottom: 20px; }
         .progress-bar { width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 20px 0; }
         .progress-fill { height: 100%; background: #667eea; width: 0%; transition: width 0.3s; }
         .topology-container { position: relative; height: 500px; background: #f3f4f6; border-radius: 12px; }
@@ -50,6 +50,10 @@
         .stat-label { color: #6b7280; margin-top: 8px; }
         .unit-badge { display: inline-block; padding: 4px 12px; background: #f0fdf4; color: #166534; border-radius: 9999px; font-weight: 500; }
         .speed-indicator { font-size: 18px; font-weight: bold; color: #10b981; }
+        .metrics-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-top: 20px; }
+        .metric-card { background: #f9fafb; padding: 20px; border-radius: 8px; text-align: center; }
+        .metric-value { font-size: 24px; font-weight: bold; color: #667eea; margin-bottom: 8px; }
+        .metric-label { font-size: 14px; color: #6b7280; }
     </style>
 </head>
 <body>
@@ -87,24 +91,46 @@
                             <label style="font-weight: 600; margin-right: 10px;">当前单位：</label>
                             <span class="unit-badge" id="current-unit-display">-</span>
                         </div>
-                        <div class="form-group" style="max-width: 200px; margin: 0 auto;">
-                            <label>单位切换</label>
-                            <select id="unit-type" onchange="updateUnitDisplay()">
+                        
+                        <div class="speed-display">
+                            <div id="speed-value" class="speed-value">0</div>
+                            <div id="speed-unit" class="speed-unit">Mbps</div>
+                            <div id="test-status" style="margin-top: 20px; color: #6b7280;">点击开始测速</div>
+                            <div class="progress-bar">
+                                <div id="progress-fill" class="progress-fill"></div>
+                            </div>
+                        </div>
+                        
+                        <div style="text-align: center; margin-bottom: 20px;">
+                            <label style="margin-right: 10px;">显示单位：</label>
+                            <select id="unit-type" onchange="updateUnitDisplay()" style="width: auto; display: inline-block;">
                                 <option value="mbps">Mbps</option>
                                 <option value="mbs">MB/s</option>
                                 <option value="kbps">Kbps</option>
                             </select>
                         </div>
-                        <div class="speed-display">
-                            <div id="speed-value" class="speed-value">0.00</div>
-                            <div id="speed-unit" class="speed-unit">Mbps</div>
-                            <div class="progress-bar">
-                                <div id="progress-fill" class="progress-fill"></div>
-                            </div>
-                            <div id="test-status" style="margin-top: 20px; color: #6b7280;"></div>
-                        </div>
+                        
                         <div style="text-align: center;">
                             <button id="start-btn" class="btn btn-primary" onclick="startSpeedTest()">开始测速</button>
+                        </div>
+                        
+                        <div class="metrics-grid" id="results-grid">
+                            <div class="metric-card">
+                                <div class="metric-value" id="download-result">-</div>
+                                <div class="metric-label">下载速度</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="upload-result">-</div>
+                                <div class="metric-label">上传速度</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="ping-result">-</div>
+                                <div class="metric-label">延迟(Ping)</div>
+                            </div>
+                            <div class="metric-card">
+                                <div class="metric-value" id="jitter-result">-</div>
+                                <div class="metric-label">抖动</div>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -194,6 +220,12 @@
         let unitSpeeds = {};
         let historyChart = null;
         let currentUnitType = 'mbps';
+        let isTesting = false;
+        
+        let currentDownloadSpeed = 0;
+        let currentUploadSpeed = 0;
+        let currentPing = 0;
+        let currentJitter = 0;
 
         document.addEventListener('DOMContentLoaded', () => {
             if (token && currentUser) {
@@ -211,7 +243,11 @@
                 logout();
                 throw new Error('Unauthorized');
             }
-            return res.json();
+            try {
+                return await res.json();
+            } catch (e) {
+                return {};
+            }
         }
 
         async function login() {
@@ -219,7 +255,8 @@
             const password = document.getElementById('login-password').value;
             try {
                 const data = await apiRequest('/api/login', {
-                    method: 'POST', body: JSON.stringify({ username, password }) });
+                    method: 'POST', body: JSON.stringify({ username, password })
+                });
                 token = data.token;
                 currentUser = data.user;
                 localStorage.setItem('token', token);
@@ -296,7 +333,6 @@
             units = await apiRequest('/api/units');
         }
 
-        let isTesting = false;
         async function startSpeedTest() {
             if (isTesting) return;
             
@@ -304,99 +340,223 @@
             const startBtn = document.getElementById('start-btn');
             startBtn.disabled = true;
             startBtn.textContent = '测速中...';
-            document.getElementById('test-status').textContent = '准备测速...';
+            
+            currentDownloadSpeed = 0;
+            currentUploadSpeed = 0;
+            currentPing = 0;
+            currentJitter = 0;
+            
+            updateDisplay(0);
 
             try {
-                const downloadSpeed = await performSpeedTest();
-                document.getElementById('test-status').textContent = '测速完成';
-                document.getElementById('speed-value').textContent = downloadSpeed.toFixed(2);
-
+                // 1. 首先进行 Ping 测试
+                document.getElementById('test-status').textContent = '正在测试延迟...';
+                const pingResults = await testPing();
+                currentPing = pingResults.ping;
+                currentJitter = pingResults.jitter;
+                document.getElementById('ping-result').textContent = currentPing.toFixed(2) + ' ms';
+                document.getElementById('jitter-result').textContent = currentJitter.toFixed(2) + ' ms';
+                
+                // 2. 然后进行下载测试
+                document.getElementById('test-status').textContent = '正在测试下载速度...';
+                currentDownloadSpeed = await testDownload();
+                document.getElementById('download-result').textContent = currentDownloadSpeed.toFixed(2) + ' Mbps';
+                
+                // 3. 最后进行上传测试
+                document.getElementById('test-status').textContent = '正在测试上传速度...';
+                currentUploadSpeed = await testUpload();
+                document.getElementById('upload-result').textContent = currentUploadSpeed.toFixed(2) + ' Mbps';
+                
+                document.getElementById('speed-value').textContent = formatSpeed(currentDownloadSpeed);
+                
+                // 保存测速结果
                 await apiRequest('/api/speedtest', {
                     method: 'POST',
                     body: JSON.stringify({
-                        download: downloadSpeed,
-                        upload: Math.random() * 100,
-                        ping: Math.random() * 50,
-                        jitter: Math.random() * 10
+                        download: currentDownloadSpeed,
+                        upload: currentUploadSpeed,
+                        ping: currentPing,
+                        jitter: currentJitter
                     })
                 });
-
+                
+                document.getElementById('test-status').textContent = '测速完成！';
                 alert('测速完成并已保存！');
+                
             } catch (e) {
                 console.error('测速失败:', e);
-                alert('测速失败: ' + e.message);
+                document.getElementById('test-status').textContent = '测速失败: ' + e.message;
             } finally {
                 isTesting = false;
                 startBtn.disabled = false;
                 startBtn.textContent = '开始测速';
             }
         }
-
-        async function performSpeedTest() {
-            const speedValue = document.getElementById('speed-value');
-            const progressFill = document.getElementById('progress-fill');
-            const status = document.getElementById('test-status');
-            
-            status.textContent = '正在进行延迟测试...';
-            await new Promise(resolve => setTimeout(resolve, 500));
-            
-            status.textContent = '开始下载速度测试...';
-            
-            // 生成随机数据进行测速
-            const testData = new Uint8Array(10 * 1024 * 1024); // 10MB 数据
-            let currentSpeed = 0;
-            let progress = 0;
-            
-            return new Promise((resolve) => {
-                const interval = setInterval(() => {
-                    progress += 4;
-                    
-                    // 模拟真实测速数据
-                    const baseSpeed = 80 + Math.random() * 120;
-                    const variance = (Math.random() - 0.5) * 20;
-                    currentSpeed = baseSpeed + variance + (progress / 100) * 20;
-                    
-                    speedValue.textContent = convertSpeed(currentSpeed).toFixed(2);
-                    progressFill.style.width = progress + '%';
-                    status.textContent = `下载测试中 ${progress}% - 当前速度: ${currentSpeed.toFixed(2)} Mbps`;
-
-                    if (progress >= 100) {
-                        clearInterval(interval);
-                        status.textContent = '测速完成';
-                        resolve(currentSpeed);
-                    }
-                }, 100);
-            });
-        }
-
-        function convertSpeed(speed) {
-            if (currentUnitType === 'mbs') {
-                return speed / 8;
-            } else if (currentUnitType === 'kbps') {
-                return speed * 1000;
+        
+        async function testPing() {
+            const pings = [];
+            for (let i = 0; i < 10; i++) {
+                const start = Date.now();
+                try {
+                    await fetch('/api/speedtest/ping', {
+                        cache: 'no-store'
+                    });
+                    const elapsed = Date.now() - start;
+                    pings.push(elapsed);
+                } catch (e) {
+                    pings.push(999);
+                }
+                await new Promise(r => setTimeout(r, 50));
             }
-            return speed;
+            
+            const avgPing = pings.reduce((a, b) => a + b, 0) / pings.length;
+            const jitter = pings.length > 1 ? Math.sqrt(pings.reduce((a, b) => a + Math.pow(b - avgPing, 2), 0) / pings.length) : 0;
+            
+            return { ping: avgPing, jitter };
+        }
+        
+        async function testDownload() {
+            const testDuration = 10000; // 10秒
+            const startTime = Date.now();
+            let totalBytes = 0;
+            let lastUpdate = startTime;
+            let lastBytes = 0;
+            let currentSpeed = 0;
+            
+            const updateProgress = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(100, (elapsed / (testDuration * 0.5)) * 100);
+                document.getElementById('progress-fill').style.width = progress + '%';
+                
+                if (elapsed - lastUpdate > 500 && totalBytes > 0) {
+                    const timeDiff = (elapsed - lastUpdate) / 1000;
+                    const byteDiff = totalBytes - lastBytes;
+                    currentSpeed = (byteDiff * 8 / 1000000) / timeDiff;
+                    updateDisplay(currentSpeed);
+                    lastUpdate = elapsed;
+                    lastBytes = totalBytes;
+                }
+            };
+            
+            const progressInterval = setInterval(updateProgress, 100);
+            
+            const downloadPromises = [];
+            for (let i = 0; i < 6; i++) {
+                downloadPromises.push(runDownloadTest(i));
+            }
+            
+            async function runDownloadTest(id) {
+                const endTime = startTime + testDuration * 0.5;
+                while (Date.now() < endTime) {
+                    try {
+                        const response = await fetch('/api/speedtest/garbage?ckSize=4', {
+                            cache: 'no-store'
+                        });
+                        const blob = await response.blob();
+                        totalBytes += blob.size;
+                    } catch (e) {
+                        console.error('下载错误:', e);
+                    }
+                }
+            }
+            
+            await Promise.all(downloadPromises);
+            clearInterval(progressInterval);
+            
+            const elapsed = (Date.now() - startTime) / 1000;
+            document.getElementById('progress-fill').style.width = '100%';
+            return (totalBytes * 8 / 1000000) / elapsed;
+        }
+        
+        async function testUpload() {
+            const testDuration = 10000; // 10秒
+            const startTime = Date.now();
+            let totalBytes = 0;
+            let lastUpdate = startTime;
+            let lastBytes = 0;
+            let currentSpeed = 0;
+            
+            const dataSize = 1 * 1024 * 1024; // 1MB
+            const uploadData = new ArrayBuffer(dataSize);
+            new Uint8Array(uploadData).forEach((_, i) => {
+                new Uint8Array(uploadData)[i] = Math.floor(Math.random() * 256);
+            });
+            
+            const updateProgress = () => {
+                const elapsed = Date.now() - startTime;
+                const progress = Math.min(100, 50 + (elapsed / (testDuration * 0.5)) * 50);
+                document.getElementById('progress-fill').style.width = progress + '%';
+                
+                if (elapsed - lastUpdate > 500 && totalBytes > 0) {
+                    const timeDiff = (elapsed - lastUpdate) / 1000;
+                    const byteDiff = totalBytes - lastBytes;
+                    currentSpeed = (byteDiff * 8 / 1000000) / timeDiff;
+                    updateDisplay(currentSpeed);
+                    lastUpdate = elapsed;
+                    lastBytes = totalBytes;
+                }
+            };
+            
+            const progressInterval = setInterval(updateProgress, 100);
+            
+            const uploadPromises = [];
+            for (let i = 0; i < 4; i++) {
+                uploadPromises.push(runUploadTest(i, uploadData));
+            }
+            
+            async function runUploadTest(id, data) {
+                const endTime = startTime + testDuration * 0.5;
+                while (Date.now() < endTime) {
+                    try {
+                        const response = await fetch('/api/speedtest/empty', {
+                            method: 'POST',
+                            body: data,
+                            cache: 'no-store'
+                        });
+                        totalBytes += data.byteLength;
+                    } catch (e) {
+                        console.error('上传错误:', e);
+                    }
+                }
+            }
+            
+            await Promise.all(uploadPromises);
+            clearInterval(progressInterval);
+            
+            const elapsed = (Date.now() - startTime) / 1000;
+            document.getElementById('progress-fill').style.width = '100%';
+            return (totalBytes * 8 / 1000000) / elapsed;
+        }
+        
+        function updateDisplay(speed) {
+            document.getElementById('speed-value').textContent = formatSpeed(speed);
+        }
+        
+        function formatSpeed(speed) {
+            if (currentUnitType === 'mbs') {
+                return (speed / 8).toFixed(2);
+            } else if (currentUnitType === 'kbps') {
+                return (speed * 1000).toFixed(0);
+            }
+            return speed.toFixed(2);
         }
 
         function updateUnitDisplay() {
             currentUnitType = document.getElementById('unit-type').value;
-            const speedValueElement = document.getElementById('speed-value');
-            const currentSpeed = parseFloat(speedValueElement.textContent);
+            const speedValue = document.getElementById('speed-value');
             
             let unit = 'Mbps';
-            let displayValue = currentSpeed;
-            
             if (currentUnitType === 'mbs') {
                 unit = 'MB/s';
             } else if (currentUnitType === 'kbps') {
                 unit = 'Kbps';
             }
             
-            // 如果有速度值就转换单位，否则保持原样
-            if (currentSpeed > 0) {
-                speedValueElement.textContent = convertSpeed(currentSpeed).toFixed(2);
-            }
             document.getElementById('speed-unit').textContent = unit;
+            
+            if (currentDownloadSpeed > 0) {
+                speedValue.textContent = formatSpeed(currentDownloadSpeed);
+            }
         }
 
         async function loadHistory() {
@@ -503,7 +663,6 @@
         async function loadTopology() {
             const data = await apiRequest('/api/topology');
             
-            // 获取每个单位的最新测速结果
             unitSpeeds = {};
             for (const unit of data.units) {
                 try {

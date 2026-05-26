@@ -39,45 +39,54 @@ func main() {
 	r.GET("/api/units", handlers.GetUnits)
 	r.POST("/api/speedtest", handlers.SubmitSpeedTest)
 	
-	// 测速端点
-	r.GET("/api/speedtest/download", func(c *gin.Context) {
-		sizeStr := c.DefaultQuery("size", "10") // 单位是 MB
-		var sizeMB int
-		s, err := strconv.Atoi(sizeStr)
-		if err != nil || s <= 0 {
-			sizeMB = 10
-		} else {
-			sizeMB = s
+	// 测速端点 - 参照 librespeed/speedtest-go 的实现
+	r.GET("/api/speedtest/garbage", func(c *gin.Context) {
+		c.Header("Content-Type", "application/octet-stream")
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		
+		sizeStr := c.DefaultQuery("ckSize", "4")
+		size, _ := strconv.Atoi(sizeStr)
+		if size <= 0 {
+			size = 4
 		}
+		chunkSize := size * 1024 * 1024
 		
-		if sizeMB > 100 {
-			sizeMB = 100
-		}
-		
-		sizeBytes := sizeMB * 1024 * 1024
-		
-		// 生成随机数据
-		data := make([]byte, sizeBytes)
+		data := make([]byte, chunkSize)
 		rand.Read(data)
 		
-		c.Header("Content-Type", "application/octet-stream")
-		c.Header("Content-Disposition", "attachment; filename=\"test.bin\"")
 		c.Data(http.StatusOK, "application/octet-stream", data)
 	})
 	
-	r.POST("/api/speedtest/upload", func(c *gin.Context) {
-		var totalSize int64 = 0
-		buf := make([]byte, 1024*10)
-		for {
-			n, err := c.Request.Body.Read(buf)
-			if n > 0 {
-				totalSize += int64(n)
-			}
-			if err != nil {
-				break
-			}
-		}
-		c.JSON(http.StatusOK, gin.H{"size": totalSize})
+	r.GET("/api/speedtest/empty", func(c *gin.Context) {
+		c.Header("Content-Type", "application/json")
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		c.JSON(http.StatusOK, gin.H{})
+	})
+	
+	r.POST("/api/speedtest/empty", func(c *gin.Context) {
+		c.Header("Content-Type", "application/json")
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		c.JSON(http.StatusOK, gin.H{})
+	})
+	
+	r.POST("/api/speedtest/getIP", func(c *gin.Context) {
+		c.Header("Content-Type", "application/json")
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		c.JSON(http.StatusOK, gin.H{
+			"processedString": c.ClientIP(),
+		})
+	})
+	
+	r.GET("/api/speedtest/ping", func(c *gin.Context) {
+		c.Header("Content-Type", "application/json")
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		c.JSON(http.StatusOK, gin.H{})
+	})
+	
+	r.POST("/api/speedtest/results", func(c *gin.Context) {
+		c.Header("Content-Type", "application/json")
+		c.Header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+		c.JSON(http.StatusOK, gin.H{})
 	})
 
 	auth := r.Group("/api")
