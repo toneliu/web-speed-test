@@ -1,0 +1,556 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>网络带宽测速系统</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.1); padding: 24px; margin-bottom: 20px; }
+        .btn { padding: 10px 20px; border: none; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: 600; transition: all 0.2s; }
+        .btn-primary { background: #667eea; color: white; }
+        .btn-primary:hover { background: #5568d3; }
+        .btn-danger { background: #ef4444; color: white; }
+        .btn-danger:hover { background: #dc2626; }
+        .btn-success { background: #10b981; color: white; }
+        .btn-success:hover { background: #059669; }
+        .btn-secondary { background: #6b7280; color: white; }
+        .btn-secondary:hover { background: #4b5563; }
+        input, select { padding: 10px; border: 1px solid #d1d5db; border-radius: 8px; font-size: 14px; width: 100%; }
+        table { width: 100%; border-collapse: collapse; }
+        th, td { padding: 12px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+        th { background: #f9fafb; font-weight: 600; }
+        .hidden { display: none; }
+        .nav { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+        .nav button { padding: 8px 16px; }
+        .nav button.active { background: #667eea; color: white; }
+        h1, h2, h3 { margin-bottom: 16px; color: #1f2937; }
+        .speed-display { text-align: center; padding: 40px; }
+        .speed-value { font-size: 64px; font-weight: 700; color: #667eea; }
+        .speed-unit { font-size: 24px; color: #6b7280; }
+        .progress-bar { width: 100%; height: 8px; background: #e5e7eb; border-radius: 4px; overflow: hidden; margin: 20px 0; }
+        .progress-fill { height: 100%; background: #667eea; width: 0%; transition: width 0.3s; }
+        .unit-selector { max-width: 400px; margin: 0 auto 20px; }
+        .topology-container { position: relative; height: 500px; background: #f3f4f6; border-radius: 12px; }
+        canvas { max-width: 100%; }
+        .login-container { max-width: 400px; margin: 100px auto; }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; margin-bottom: 8px; font-weight: 600; color: #374151; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; }
+        .header h1 { color: white; margin-bottom: 0; }
+        .user-info { color: white; }
+        .tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+        .tab { padding: 8px 16px; background: white; border: none; border-radius: 8px; cursor: pointer; }
+        .tab.active { background: #667eea; color: white; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 16px; }
+        .stat-card { text-align: center; padding: 20px; }
+        .stat-value { font-size: 32px; font-weight: 700; color: #667eea; }
+        .stat-label { color: #6b7280; margin-top: 8px; }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div id="login-page" class="container">
+            <div class="login-container card">
+                <h2 style="text-align: center;">网络带宽测速系统</h2>
+                <div class="form-group">
+                    <label>用户名</label>
+                    <input type="text" id="login-username" placeholder="请输入用户名">
+                </div>
+                <div class="form-group">
+                    <label>密码</label>
+                    <input type="password" id="login-password" placeholder="请输入密码">
+                </div>
+                <button class="btn btn-primary" style="width: 100%;" onclick="login()">登录</button>
+            </div>
+        </div>
+
+        <div id="main-page" class="hidden">
+            <div class="container">
+                <div class="header">
+                    <h1>网络带宽测速系统</h1>
+                    <div class="user-info">
+                        <span id="user-display"></span>
+                        <button class="btn btn-secondary" style="margin-left: 10px;" onclick="logout()">退出</button>
+                    </div>
+                </div>
+
+                <div id="nav-tabs" class="nav"></div>
+
+                <div id="speed-test-page" class="page">
+                    <div class="card">
+                        <div class="unit-selector">
+                            <div class="form-group">
+                                <label>选择单位</label>
+                                <select id="unit-select">
+                                    <option value="">请选择单位</option>
+                                </select>
+                            </div>
+                            <div class="form-group">
+                                <label>单位切换</label>
+                                <select id="unit-type" onchange="updateUnitDisplay()">
+                                    <option value="mbps">Mbps</option>
+                                    <option value="mbps">MB/s</option>
+                                    <option value="kbps">Kbps</option>
+                                </select>
+                            </div>
+                        </div>
+                        <div class="speed-display">
+                            <div id="speed-value" class="speed-value">0.00</div>
+                            <div id="speed-unit" class="speed-unit">Mbps</div>
+                            <div class="progress-bar">
+                                <div id="progress-fill" class="progress-fill"></div>
+                            </div>
+                            <div id="test-status" style="margin-top: 20px; color: #6b7280;"></div>
+                        </div>
+                        <div style="text-align: center;">
+                            <button id="start-btn" class="btn btn-primary" onclick="startSpeedTest()">开始测速</button>
+                        </div>
+                    </div>
+                </div>
+
+                <div id="history-page" class="page hidden">
+                    <div class="card">
+                        <h2>测速历史</h2>
+                        <div style="margin-bottom: 20px;">
+                            <canvas id="history-chart"></canvas>
+                        </div>
+                        <table id="history-table">
+                            <thead>
+                                <tr>
+                                    <th>单位</th>
+                                    <th>下载 (Mbps)</th>
+                                    <th>上传 (Mbps)</th>
+                                    <th>延迟 (ms)</th>
+                                    <th>时间</th>
+                                </tr>
+                            </thead>
+                            <tbody id="history-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="admin-page" class="page hidden">
+                    <div class="card">
+                        <h2>统计概览</h2>
+                        <div class="grid">
+                            <div class="stat-card card">
+                                <div id="stat-units" class="stat-value">-</div>
+                                <div class="stat-label">单位总数</div>
+                            </div>
+                            <div class="stat-card card">
+                                <div id="stat-tests" class="stat-value">-</div>
+                                <div class="stat-label">测速次数</div>
+                            </div>
+                            <div class="stat-card card">
+                                <div id="stat-recent" class="stat-value">-</div>
+                                <div class="stat-label">最近测速</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="card">
+                        <h2>单位管理</h2>
+                        <div style="margin-bottom: 16px;">
+                            <input type="text" id="new-unit-name" placeholder="新单位名称" style="width: 200px; margin-right: 8px;">
+                            <button class="btn btn-success" onclick="createUnit()">添加单位</button>
+                        </div>
+                        <table id="units-table">
+                            <thead>
+                                <tr>
+                                    <th>ID</th>
+                                    <th>单位名称</th>
+                                    <th>操作</th>
+                                </tr>
+                            </thead>
+                            <tbody id="units-tbody"></tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <div id="topology-page" class="page hidden">
+                    <div class="card">
+                        <h2>网络拓扑</h2>
+                        <div id="topology-container" class="topology-container"></div>
+                        <div style="margin-top: 20px;">
+                            <h3>添加自定义链路</h3>
+                            <div class="form-group" style="display: flex; gap: 10px;">
+                                <select id="link-from" style="flex: 1;"></select>
+                                <span>→</span>
+                                <select id="link-to" style="flex: 1;"></select>
+                                <input type="number" id="link-bandwidth" placeholder="带宽 (Mbps)" style="width: 150px;">
+                                <button class="btn btn-success" onclick="addTopologyLink()">添加</button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let token = localStorage.getItem('token');
+        let currentUser = JSON.parse(localStorage.getItem('user') || 'null');
+        let units = [];
+        let historyChart = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            if (token && currentUser) {
+                showMainPage();
+            }
+        });
+
+        async function apiRequest(url, options = {}) {
+            const headers = { 'Content-Type': 'application/json', ...options.headers };
+            if (token) {
+                headers['Authorization'] = `Bearer ${token}`;
+            }
+            const res = await fetch(url, { ...options, headers });
+            if (res.status === 401) {
+                logout();
+                throw new Error('Unauthorized');
+            }
+            return res.json();
+        }
+
+        async function login() {
+            const username = document.getElementById('login-username').value;
+            const password = document.getElementById('login-password').value;
+            try {
+                const data = await apiRequest('/api/login', {
+                    method: 'POST', body: JSON.stringify({ username, password }) });
+                token = data.token;
+                currentUser = data.user;
+                localStorage.setItem('token', token);
+                localStorage.setItem('user', JSON.stringify(currentUser));
+                showMainPage();
+            } catch (e) {
+                alert('登录失败');
+            }
+        }
+
+        function logout() {
+            token = null;
+            currentUser = null;
+            localStorage.removeItem('token');
+            localStorage.removeItem('user');
+            document.getElementById('login-page').classList.remove('hidden');
+            document.getElementById('main-page').classList.add('hidden');
+        }
+
+        async function showMainPage() {
+            document.getElementById('login-page').classList.add('hidden');
+            document.getElementById('main-page').classList.remove('hidden');
+            document.getElementById('user-display').textContent = `用户: ${currentUser.username}${currentUser.is_admin ? ' (管理员)' : ''}`;
+
+            const navTabs = document.getElementById('nav-tabs');
+            navTabs.innerHTML = '';
+
+            const tabs = [
+                { id: 'speed-test-page', label: '测速' },
+                { id: 'history-page', label: '历史记录' }
+            ];
+            if (currentUser.is_admin) {
+                tabs.push({ id: 'admin-page', label: '管理后台' });
+                tabs.push({ id: 'topology-page', label: '网络拓扑' });
+            }
+
+            tabs.forEach(tab => {
+                const btn = document.createElement('button');
+                btn.className = 'btn';
+                btn.textContent = tab.label;
+                btn.onclick = () => showPage(tab.id);
+                navTabs.appendChild(btn);
+            });
+
+            await loadUnits();
+            showPage('speed-test-page');
+        }
+
+        function showPage(pageId) {
+            document.querySelectorAll('.page').forEach(p => p.classList.add('hidden'));
+            document.getElementById(pageId).classList.remove('hidden');
+
+            if (pageId === 'speed-test-page') loadUnits();
+            if (pageId === 'history-page') loadHistory();
+            if (pageId === 'admin-page') loadAdmin();
+            if (pageId === 'topology-page') loadTopology();
+        }
+
+        async function loadUnits() {
+            units = await apiRequest('/api/units');
+            const select = document.getElementById('unit-select');
+            select.innerHTML = '<option value="">请选择单位</option>';
+            units.forEach(u => {
+                const opt = document.createElement('option');
+                opt.value = u.id;
+                opt.textContent = u.name;
+                if (!currentUser.is_admin && currentUser.unit_id == u.id) {
+                    opt.selected = true;
+                }
+                select.appendChild(opt);
+            });
+        }
+
+        let isTesting = false;
+        async function startSpeedTest() {
+            if (isTesting) return;
+            const unitId = document.getElementById('unit-select').value;
+            if (!unitId) {
+                alert('请选择单位');
+                return;
+            }
+
+            isTesting = true;
+            const startBtn = document.getElementById('start-btn');
+            startBtn.disabled = true;
+            startBtn.textContent = '测速中...';
+            document.getElementById('test-status').textContent = '准备测速...';
+
+            try {
+                const downloadSpeed = await simulateDownloadTest();
+                document.getElementById('test-status').textContent = '测速完成';
+                document.getElementById('speed-value').textContent = downloadSpeed.toFixed(2);
+
+                await apiRequest('/api/speedtest', {
+                    method: 'POST',
+                    body: JSON.stringify({
+                        unit_id: parseInt(unitId),
+                        download: downloadSpeed,
+                        upload: Math.random() * 100,
+                        ping: Math.random() * 50,
+                        jitter: Math.random() * 10
+                    })
+                });
+
+                alert('测速完成并已保存！');
+            } catch (e) {
+                alert('测速失败');
+            } finally {
+                isTesting = false;
+                startBtn.disabled = false;
+                startBtn.textContent = '开始测速';
+            }
+        }
+
+        function simulateDownloadTest() {
+            return new Promise((resolve) => {
+                let progress = 0;
+                const speedValue = document.getElementById('speed-value');
+                const progressFill = document.getElementById('progress-fill');
+                const status = document.getElementById('test-status');
+                let currentSpeed = 0;
+                const targetSpeed = 50 + Math.random() * 150;
+
+                const interval = setInterval(() => {
+                    progress += 2;
+                    currentSpeed = targetSpeed * (progress / 100) * (0.8 + Math.random() * 0.4);
+                    speedValue.textContent = currentSpeed.toFixed(2);
+                    progressFill.style.width = progress + '%';
+                    status.textContent = `下载测试中 ${progress}%`;
+
+                    if (progress >= 100) {
+                        clearInterval(interval);
+                        resolve(targetSpeed);
+                    }
+                }, 50);
+            };
+        }
+
+        function updateUnitDisplay() {
+            const unitType = document.getElementById('unit-type').value;
+            const speedValue = parseFloat(document.getElementById('speed-value').textContent);
+            let displayValue = speedValue;
+            let unit = 'Mbps';
+
+            if (unitType === 'mbps') {
+                displayValue = speedValue;
+                unit = 'MB/s';
+            } else if (unitType === 'kbps') {
+                displayValue = speedValue * 1000;
+                unit = 'Kbps';
+            }
+
+            document.getElementById('speed-unit').textContent = unit;
+        }
+
+        async function loadHistory() {
+            const tests = await apiRequest('/api/speedtests');
+            const tbody = document.getElementById('history-tbody');
+            tbody.innerHTML = '';
+            tests.forEach(t => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${t.unit ? t.unit.name : '-'}</td>
+                    <td>${t.download.toFixed(2)}</td>
+                    <td>${t.upload ? t.upload.toFixed(2) : '-'}</td>
+                    <td>${t.ping ? t.ping.toFixed(2) : '-'}</td>
+                    <td>${new Date(t.created_at).toLocaleString()}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+
+            const ctx = document.getElementById('history-chart').getContext('2d');
+            if (historyChart) historyChart.destroy();
+            const labels = tests.slice().reverse().map(t => new Date(t.created_at).toLocaleDateString());
+            const data = tests.slice().reverse().map(t => t.download);
+
+            historyChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels,
+                    datasets: [{
+                        label: '下载速度 (Mbps)',
+                        data,
+                        borderColor: '#667eea',
+                        fill: true,
+                        tension: 0.4
+                    }]
+                },
+                options: { responsive: true }
+            });
+        }
+
+        async function loadAdmin() {
+            const stats = await apiRequest('/api/stats');
+            document.getElementById('stat-units').textContent = stats.total_units;
+            document.getElementById('stat-tests').textContent = stats.total_tests;
+            document.getElementById('stat-recent').textContent = stats.recent_test ? stats.recent_test.download.toFixed(2) + ' Mbps' : '-';
+
+            const tbody = document.getElementById('units-tbody');
+            tbody.innerHTML = '';
+            units.forEach(u => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td>${u.id}</td>
+                    <td><input type="text" value="${u.name}" id="unit-name-${u.id}"></td>
+                    <td>
+                        <button class="btn btn-primary" onclick="updateUnit(${u.id})">更新</button>
+                        <button class="btn btn-danger" onclick="deleteUnit(${u.id})">删除</button>
+                        <button class="btn btn-success" onclick="showUnitUsers(${u.id})">用户</button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function createUnit() {
+            const name = document.getElementById('new-unit-name').value;
+            if (!name) return;
+            await apiRequest('/api/units', {
+                method: 'POST',
+                body: JSON.stringify({ name })
+            });
+            document.getElementById('new-unit-name').value = '';
+            loadUnits();
+            loadAdmin();
+        }
+
+        async function updateUnit(id) {
+            const name = document.getElementById(`unit-name-${id}`).value;
+            await apiRequest(`/api/units/${id}`, {
+                method: 'PUT',
+                body: JSON.stringify({ name })
+            });
+            loadUnits();
+        }
+
+        async function deleteUnit(id) {
+            if (!confirm('确定删除？')) return;
+            await apiRequest(`/api/units/${id}`, { method: 'DELETE' });
+            loadUnits();
+            loadAdmin();
+        }
+
+        async function showUnitUsers(unitId) {
+            const users = await apiRequest(`/api/units/${unitId}/users`);
+            const username = prompt('新用户名:');
+            if (!username) return;
+            const password = prompt('密码:');
+            if (!password) return;
+            await apiRequest(`/api/units/${unitId}/users`, {
+                method: 'POST',
+                body: JSON.stringify({ username, password })
+            });
+            alert('用户创建成功');
+        }
+
+        async function loadTopology() {
+            const data = await apiRequest('/api/topology');
+            renderTopology(data.units, data.links);
+
+            const fromSelect = document.getElementById('link-from');
+            const toSelect = document.getElementById('link-to');
+            fromSelect.innerHTML = '<option value="">选择起点</option>';
+            toSelect.innerHTML = '<option value="">选择终点</option>';
+            data.units.forEach(u => {
+                fromSelect.innerHTML += `<option value="${u.id}">${u.name}</option>`;
+                toSelect.innerHTML += `<option value="${u.id}">${u.name}</option>`;
+            });
+        }
+
+        function renderTopology(units, links) {
+            const container = document.getElementById('topology-container');
+            container.innerHTML = '<svg width="100%" height="100%" viewBox="0 0 800 500"></svg>';
+            const svg = container.querySelector('svg');
+
+            const centerX = 400;
+            const centerY = 250;
+            const radius = 150;
+
+            svg.innerHTML = `
+                <circle cx="${centerX}" cy="${centerY}" r="30" fill="#667eea" />
+                <text x="${centerX}" y="${centerY + 5}" text-anchor="middle" fill="white" font-weight="bold">服务器</text>
+            `;
+
+            units.forEach((unit, i) => {
+                const angle = (i / units.length) * Math.PI * 2 - Math.PI / 2;
+                const x = centerX + Math.cos(angle) * radius;
+                const y = centerY + Math.sin(angle) * radius;
+
+                svg.innerHTML += `
+                    <line x1="${centerX}" y1="${centerY}" x2="${x}" y2="${y}" stroke="#d1d5db" stroke-width="2" />
+                    <circle cx="${x}" cy="${y}" r="25" fill="#10b981" />
+                    <text x="${x}" y="${y + 5}" text-anchor="middle" fill="white" font-size="12">${unit.name}</text>
+                `;
+            });
+
+            links.forEach(link => {
+                const fromUnit = units.find(u => u.id === link.from_unit_id);
+                const toUnit = units.find(u => u.id === link.to_unit_id);
+                if (fromUnit && toUnit) {
+                    const i1 = units.indexOf(fromUnit);
+                    const i2 = units.indexOf(toUnit);
+                    const a1 = (i1 / units.length) * Math.PI * 2 - Math.PI / 2;
+                    const a2 = (i2 / units.length) * Math.PI * 2 - Math.PI / 2;
+                    const x1 = centerX + Math.cos(a1) * radius;
+                    const y1 = centerY + Math.sin(a1) * radius;
+                    const x2 = centerX + Math.cos(a2) * radius;
+                    const y2 = centerY + Math.sin(a2) * radius;
+                    svg.innerHTML += `
+                        <line x1="${x1}" y1="${y1}" x2="${x2}" y2="${y2}" stroke="#f59e0b" stroke-width="3" stroke-dasharray="5,5" />
+                    `;
+                }
+            });
+        }
+
+        async function addTopologyLink() {
+            const fromId = document.getElementById('link-from').value;
+            const toId = document.getElementById('link-to').value;
+            const bandwidth = parseFloat(document.getElementById('link-bandwidth').value);
+            if (!fromId || !toId) return;
+            await apiRequest('/api/topology', {
+                method: 'POST',
+                body: JSON.stringify({
+                    from_unit_id: parseInt(fromId),
+                    to_unit_id: parseInt(toId),
+                    bandwidth
+                })
+            });
+            loadTopology();
+        }
+    </script>
+</body>
+</html>
