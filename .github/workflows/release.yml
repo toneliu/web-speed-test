@@ -53,14 +53,6 @@ jobs:
   build-windows:
     name: Build Windows
     runs-on: windows-latest
-    strategy:
-      matrix:
-        include:
-          - GOARCH: 386
-            BINARY_NAME: speedtest-windows-386.exe
-          - GOARCH: amd64
-            BINARY_NAME: speedtest-windows-amd64.exe
-
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -70,20 +62,20 @@ jobs:
         with:
           go-version: '1.21'
 
-      - name: Build Windows binary
+      - name: Build Windows AMD64
         env:
           GOOS: windows
-          GOARCH: ${{ matrix.GOARCH }}
+          GOARCH: amd64
           CGO_ENABLED: '1'
         run: |
-          go build -v -o ${{ matrix.BINARY_NAME }} .
+          go build -v -o speedtest-windows-amd64.exe .
           dir
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
         with:
-          name: ${{ matrix.BINARY_NAME }}
-          path: ${{ matrix.BINARY_NAME }}
+          name: speedtest-windows-amd64
+          path: speedtest-windows-amd64.exe
 
   release:
     name: Create Release
@@ -107,16 +99,10 @@ jobs:
           name: speedtest-linux-amd64
           path: ./
 
-      - name: Download Windows 386
-        uses: actions/download-artifact@v4
-        with:
-          name: speedtest-windows-386.exe
-          path: ./
-
       - name: Download Windows AMD64
         uses: actions/download-artifact@v4
         with:
-          name: speedtest-windows-amd64.exe
+          name: speedtest-windows-amd64
           path: ./
 
       - name: List files
@@ -129,7 +115,6 @@ jobs:
           files: |
             speedtest-linux-386
             speedtest-linux-amd64
-            speedtest-windows-386.exe
             speedtest-windows-amd64.exe
           generate_release_notes: true
         env:
