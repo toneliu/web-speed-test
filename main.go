@@ -37,7 +37,6 @@ func main() {
 
 	r.POST("/api/login", handlers.Login)
 	r.GET("/api/units", handlers.GetUnits)
-	r.POST("/api/speedtest", handlers.SubmitSpeedTest)
 	
 	// 测速端点 - 参照 librespeed/speedtest-go 的实现
 	r.GET("/api/speedtest/garbage", func(c *gin.Context) {
@@ -92,6 +91,7 @@ func main() {
 	auth := r.Group("/api")
 	auth.Use(middleware.AuthMiddleware())
 	{
+		auth.POST("/speedtest", handlers.SubmitSpeedTest)
 		auth.GET("/speedtests", handlers.GetSpeedTests)
 		auth.GET("/stats", handlers.GetStats)
 
