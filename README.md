@@ -1,142 +1,171 @@
-# 网络带宽测速系统
+iperf3:  A TCP, UDP, and SCTP network bandwidth measurement tool
+================================================================
 
-一个基于 Go 语言的网络带宽测速系统，支持多单位管理、测速记录、拓扑可视化等功能。
+Summary
+-------
 
-## 功能特性
+iperf is a tool for active measurement of the maximum achievable
+bandwidth on IP networks.  It supports tuning of various parameters
+related to timing, protocols, and buffers.  For each test it reports
+the measured throughput / bitrate, loss, and other parameters.
 
-- **客户端测速**：用户选择所属单位后点击测速，自动测量下行带宽并上报结果，支持切换单位（Mbps/MB/s/Kbps）
-- **自动上报与历史记录**：每次测速自动保存。管理员可查看所有单位的测速历史（表格 + 趋势折线图）；各单位有自己的账号，登录后只能查看自己单位的测速历史记录
-- **多单位与单位账号管理**：管理员可增删改查单位，并可为每个单位创建/重置登录账号（用户名 + 密码）
-- **拓扑可视化**：星型拓扑图展示服务器到各单位的链路带宽，支持管理员手动添加单位间自定义链路
-- **单文件部署**：生成一个可执行文件，运行即用（前端静态资源用 go:embed 嵌入，数据库用 SQLite）
-- **GitHub Actions 自动构建**：自动编译 Linux 和 Windows 版本并发布到 Release
+This version, sometimes referred to as iperf3, is a redesign of an
+original version developed at NLANR/DAST.  iperf3 is a new
+implementation from scratch, with the goal of a smaller, simpler code
+base, and a library version of the functionality that can be used in
+other programs. iperf3 also has a number of features found in other tools
+such as nuttcp and netperf, but were missing from the original iperf.
+These include, for example, a zero-copy mode and optional JSON output.
+Note that iperf3 is *not* backwards compatible with the original iperf.
 
-## 默认账号
+One of the primary uses for iperf3 is as a component of the perfSONAR
+network measurement system (https://www.perfsonar.net/). It is also
+useful as a standalone tool, and is used as such by ESnet and other
+R&E networks. It has also been found useful in the general networking
+community and has even found its way into various commercial products.
 
-| 角色     | 用户名   | 密码       | 说明         |
-|----------|----------|------------|--------------|
-| 管理员   | admin    | admin123   | 系统管理员   |
-| 单位A用户| unita    | unita123   | 单位A账号    |
-| 单位B用户| unitb    | unitb123   | 单位B账号    |
-| 单位C用户| unitc    | unitc123   | 单位C账号    |
+Primary development for iperf3 takes place on Ubuntu Linux, FreeBSD,
+and macOS.  At this time, these are the only officially supported
+platforms, however there have been some reports of success with
+OpenBSD, NetBSD, Android, Solaris, and other Linux distributions.
 
-## 快速开始
+iperf3 is principally developed by ESnet / Lawrence Berkeley National
+Laboratory.  It is released under a three-clause BSD license.
 
-### 从 Release 下载
+For more information see: https://software.es.net/iperf
 
-1. 访问 [Releases 页面](https://github.com/your-username/speedtest/releases)
-2. 下载对应系统的可执行文件：
-   - Linux (386): `speedtest-linux-386`
-   - Linux (AMD64): `speedtest-linux-amd64`
-   - Windows (386): `speedtest-windows-386.exe`
-   - Windows (AMD64): `speedtest-windows-amd64.exe`
-3. 运行程序：
-   ```bash
-   # Linux
-   chmod +x speedtest-linux-amd64
-   ./speedtest-linux-amd64
+Source code and issue tracker: https://github.com/esnet/iperf
 
-   # Windows (PowerShell)
-   .\speedtest-windows-amd64.exe
-   ```
+Discussion forums: https://github.com/esnet/iperf/discussions
 
-### 本地构建
+Reporting security vulnerabilities: iperf@es.net
 
-```bash
-# 克隆仓库
-git clone https://github.com/your-username/speedtest.git
-cd speedtest
+Frequently Asked Questions: https://software.es.net/iperf/faq.html
 
-# 安装依赖
-go mod tidy
+Obtaining iperf3
+----------------
 
-# 运行开发服务器
-go run main.go
+Downloads of iperf3 are available at:
 
-# 构建可执行文件
-go build -o speedtest .
+    https://downloads.es.net/pub/iperf/
 
-# 使用脚本构建所有平台版本
-./build.sh
-```
+To check out the most recent code, clone the git repository at:
 
-### 访问应用
+    https://github.com/esnet/iperf.git
 
-- 打开浏览器访问：http://localhost:8080
-- 使用默认账号登录
+Building iperf3
+---------------
 
-### 开始测速
+### Prerequisites: ###
 
-- 选择单位
-- 点击"开始测速"
-- 查看结果和历史记录
+None.
 
-## 项目结构
+### Building ###
 
-```
-speedtest/
-├── main.go              # 主程序入口
-├── go.mod               # Go 依赖管理
-├── go.sum               # Go 依赖锁定
-├── build.sh             # 本地构建脚本
-├── .gitignore           # Git 忽略文件
-├── README.md            # 项目文档
-├── .github/
-│   └── workflows/
-│       └── release.yml  # GitHub Actions 配置
-├── frontend/
-│   └── index.html       # 单页面应用
-└── pkg/
-    ├── models/          # 数据模型
-    ├── database/        # 数据库操作
-    ├── middleware/      # 认证中间件
-    └── handlers/        # API 处理函数
-```
+    ./configure; make; make install
 
-## 开发
+(Note: If configure fails, try running `./bootstrap.sh` first)
 
-```bash
-# 安装依赖
-go mod tidy
+Invoking iperf3
+---------------
 
-# 运行开发服务器
-go run main.go
+iperf3 includes a manual page listing all of the command-line options.
+The manual page is the most up-to-date reference to the various flags and parameters.
 
-# 构建可执行文件
-go build -o speedtest .
+For sample command line usage, see:
 
-# 构建所有平台版本
-./build.sh
-```
+https://fasterdata.es.net/performance-testing/network-troubleshooting-tools/iperf/
 
-## GitHub Actions 自动构建和发布
+Using the default options, iperf is meant to show typical well
+designed application performance.  "Typical well designed application"
+means avoiding artificial enhancements that work only for testing
+(such as splice()'ing the data to /dev/null).  iperf does also have
+flags for "extreme best case" optimizations, but they must be
+explicitly activated.
 
-项目配置了 GitHub Actions 自动构建和发布流程：
+These flags include:
 
-### 触发方式
+    -Z, --zerocopy            use a 'zero copy' sendfile() method of sending data
+    -A, --affinity n/n,m      set CPU affinity
 
-1. **推送 Tag**：当推送格式为 `v*` 的 tag 时（如 `v1.0.0`），自动触发构建和发布
-2. **手动触发**：在 GitHub 仓库的 Actions 页面手动触发
+Bug and Security Reports
+------------------------
 
-### 发布流程
+Before submitting a bug report, please make sure you're running the
+latest version of the code, and confirm that your issue has not
+already been fixed.  Then submit to the iperf3 issue tracker on
+GitHub:
 
-- 自动构建 Linux (386/AMD64) 和 Windows (386/AMD64) 版本
-- 将构建产物上传到 Artifacts
-- 自动创建 GitHub Release 并附加所有编译好的文件
+https://github.com/esnet/iperf/issues
 
-### 创建发布
+In your issue submission, please indicate the version of iperf3 and
+what platform you're trying to run on (provide the platform
+information even if you're not using a supported platform, we
+*might* be able to help anyway).  Exact command-line arguments will
+help us recreate your problem.  If you're getting error messages,
+please include them verbatim if possible, but remember to sanitize any
+sensitive information.
 
-```bash
-# 创建 tag
-git tag -a v1.0.0 -m "Release version 1.0.0"
+If you have a question about usage or about the code, please do *not*
+submit an issue.  Please use one of the mailing lists for that.
 
-# 推送 tag
-git push origin v1.0.0
-```
+If you suspect there is a potential security issue, please contact the
+developers at:
 
-## 技术栈
+iperf@es.net
 
-- **后端**：Go + Gin + GORM + SQLite + JWT
-- **前端**：原生 HTML/JS + Chart.js
-- **打包**：go:embed 实现单文件部署
-- **CI/CD**：GitHub Actions
+Relation to iperf 2.x
+---------------------
+
+Although iperf2 and iperf3 both measure network performance,
+they are not compatible with each other.
+The projects (as of early 2026) are in active, but separate, development.
+The continuing iperf2 development
+project can be found at https://sourceforge.net/projects/iperf2/.
+
+Known Issues
+------------
+
+A set of known issues is maintained on the iperf3 Web pages:
+
+https://software.es.net/iperf/dev.html#known-issues
+
+Links
+-----
+
+This section lists links to user-contributed Web pages regarding
+iperf3.  ESnet and Lawrence Berkeley National Laboratory bear no
+responsibility for the content of these pages.
+
+* Installation instructions for Debian Linux (by Cameron Camp
+  <cameron@ivdatacenter.com>):
+
+  http://cheatsheet.logicalwebhost.com/iperf-network-testing/
+
+Copyright
+---------
+
+iperf, Copyright (c) 2014-2026, The Regents of the University of
+California, through Lawrence Berkeley National Laboratory (subject
+to receipt of any required approvals from the U.S. Dept. of
+Energy).  All rights reserved.
+
+If you have questions about your rights to use or distribute this
+software, please contact Berkeley Lab's Technology Transfer
+Department at TTD@lbl.gov.
+
+NOTICE.  This software is owned by the U.S. Department of Energy.
+As such, the U.S. Government has been granted for itself and others
+acting on its behalf a paid-up, nonexclusive, irrevocable,
+worldwide license in the Software to reproduce, prepare derivative
+works, and perform publicly and display publicly.  Beginning five
+(5) years after the date permission to assert copyright is obtained
+from the U.S. Department of Energy, and subject to any subsequent
+five (5) year renewals, the U.S. Government is granted for itself
+and others acting on its behalf a paid-up, nonexclusive,
+irrevocable, worldwide license in the Software to reproduce,
+prepare derivative works, distribute copies to the public, perform
+publicly and display publicly, and to permit others to do so.
+
+This code is distributed under a BSD style license, see the LICENSE
+file for complete information.
