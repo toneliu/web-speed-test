@@ -9,13 +9,18 @@ import (
 	"gorm.io/driver/sqlite"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
+	_ "modernc.org/sqlite"
 )
 
 var DB *gorm.DB
 
 func Init(dbPath string) error {
 	var err error
-	DB, err = gorm.Open(sqlite.Open(dbPath), &gorm.Config{
+	// 使用 modernc.org/sqlite 驱动 (纯 Go 实现, 不需要 CGO)
+	DB, err = gorm.Open(sqlite.Dialector{
+		DriverName: "sqlite",
+		DSN:        dbPath,
+	}, &gorm.Config{
 		Logger: logger.Default.LogMode(logger.Silent),
 	})
 	if err != nil {
